@@ -1,0 +1,100 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyTorch / 機械学習モデル
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+
+# データファイル（大きなデータセット）
+*.pt
+*.npy
+*.npz
+*.csv
+*.tsv
+*.parquet
+*.arrow
+data/
+datasets/
+*.data
+*.index
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Jupyter Notebook outputs (オプション: 出力を含めたい場合はコメントアウト)
+# *.ipynb
+
+# 環境変数
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ログファイル
+*.log
+logs/
+*.out
+
+# 一時ファイル
+*.tmp
+*.temp
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# モデルチェックポイントとSAE関連
+sae_mamba_layer*/
+mamba_layer*_delta.pt
+
+# 実験結果
+results/
+outputs/
+checkpoints/
+wandb/
+tensorboard/
+runs/
+
+# その他
+*.bak
+*.backup
+*.orig
+

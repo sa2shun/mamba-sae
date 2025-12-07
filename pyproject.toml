@@ -1,0 +1,24 @@
+[project]
+name = "mamba-gpt-sae"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.5.0",
+    "numpy",
+    "scipy",
+    "tqdm",
+    "matplotlib",
+    "pandas",
+    "mamba-ssm",
+    # 自作 GPT ライブラリを pip install 可能にしているならそれ (例)
+    # "my-gpt-lib @ git+https://github.com/yourname/your-gpt.git",
+    # or 自作コードはこのリポジトリ内に置く
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipython",
+    "pytest",
+    "black",
+    "ruff",
+]
