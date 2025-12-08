@@ -1,0 +1,32 @@
+output_root: /raid/sasaki/runs  # 保存先ルート（絶対パスで固定）
+model_name: state-spaces/mamba-1.4b-hf
+model_type: mamba  # or transformer
+layers: [12, 24, 36]  # L//4, L//2, 3L//4
+signal: delta  # or state
+
+dataset:
+  name: wikitext
+  config: wikitext-103-raw-v1
+  split: train
+  max_docs: 1000000
+  max_tokens_total: 5000000
+
+sae:
+  hidden_factor: 8
+  mode: k_sparse  # or l1
+  k_frac: 0.1
+  l1_lambda: null  # l1 modeの場合のみ使用
+
+train:
+  batch_size: 1024
+  num_epochs: 5
+  num_workers: 8
+  lr: 1e-3
+  log_every: 100
+
+extract:
+  max_length: 1024
+  batch_size: 64
+  chunk_size: 100000
+
+devices: [0, 1, 2, 3, 4, 5, 6]
