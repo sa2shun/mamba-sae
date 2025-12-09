@@ -1,7 +1,7 @@
 output_root: /raid/sasaki/runs  # 保存先ルート（env/tilde展開可）
 model_name: EleutherAI/pythia-1.4b-deduped
 model_type: transformer
-layers: [12, 24, 36]  # L//4, L//2, 3L//4
+layers: [6, 12, 18]  # L//4, L//2, 3L//4
 signal: state  # or state
 
 dataset:

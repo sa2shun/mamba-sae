@@ -45,11 +45,16 @@ def load_model_and_tokenizer(model_name: str, model_type: str, device_ids: List[
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
+
+    common_kwargs = {
+        "dtype": dtype,            # torch_dtype -> dtype で警告回避
+        "use_safetensors": True,   # CVE 回避のため safetensors 優先
+    }
+
     if model_type == "mamba":
-        model = MambaForCausalLM.from_pretrained(model_name, torch_dtype=dtype)
+        model = MambaForCausalLM.from_pretrained(model_name, **common_kwargs)
     else:  # transformer
-        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype)
+        model = AutoModelForCausalLM.from_pretrained(model_name, **common_kwargs)
     
     device = torch.device(f"cuda:{device_ids[0]}")
     model.to(device)
@@ -335,8 +340,10 @@ def main():
                     return_dict=True,
                     use_cache=False,
                 )
-                hs_long = out_long.hidden_states[layer][0].float().cpu()  # [T, d]
-                features_long_norm = ((hs_long - mean) / std).to(device)
+                hs_long = out_long.hidden_states[layer][0].float()  # [T, d] on model device
+                mean = checkpoint["mean"].to(hs_long.device)
+                std = checkpoint["std"].to(hs_long.device)
+                features_long_norm = (hs_long - mean) / std
                 _, z_long = sae(features_long_norm)
                 z_long = z_long.cpu()
             

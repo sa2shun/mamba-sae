@@ -59,17 +59,30 @@ def load_model_and_tokenizer(model_name: str, model_type: str, device_ids: List[
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
-    if model_type == "mamba":
-        model = MambaForCausalLM.from_pretrained(model_name, torch_dtype=dtype)
-    else:  # transformer
-        model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype)
-    
+
+    common_kwargs = {
+        "dtype": dtype,            # torch_dtype -> dtype で警告回避
+        "use_safetensors": True,   # safetensors を優先
+    }
+
+    if model_type == "pythia":
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            **common_kwargs,
+        )
+    elif model_type == "mamba":
+        model = MambaForCausalLM.from_pretrained(
+            model_name,
+            **common_kwargs,
+        )
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
     device = torch.device(f"cuda:{device_ids[0]}")
     model.to(device)
     model = nn.DataParallel(model, device_ids=device_ids)
     model.eval()
-    
+
     return model, tokenizer, device
 
 
