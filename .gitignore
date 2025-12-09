@@ -1,12 +1,12 @@
-# Python
+# Python bytecode / build artifacts
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
@@ -23,7 +23,15 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyTorch / 機械学習モデル
+# Virtual environments
+.venv/
+venv/
+
+# Environment files
+.env
+.env.*
+
+# ML / checkpoint artifacts
 *.pt
 *.pth
 *.ckpt
@@ -34,32 +42,34 @@ MANIFEST
 *.pkl
 *.pickle
 
-# データファイル（大きなデータセット）
-*.pt
+# Generated data & experiment outputs
+data/
+datasets/
+runs/
+outputs/
+results/
+checkpoints/
+wandb/
+tensorboard/
 *.npy
 *.npz
 *.csv
 *.tsv
 *.parquet
 *.arrow
-data/
-datasets/
 *.data
 *.index
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Notebook caches
+.ipynb_checkpoints/
 *.ipynb_checkpoints/
 
-# Jupyter Notebook outputs (オプション: 出力を含めたい場合はコメントアウト)
-# *.ipynb
+# Logs
+*.log
+*.out
+logs/
 
-# 環境変数
-.env
-.env.local
-.env.*.local
-
-# IDE
+# IDE / editor
 .vscode/
 .idea/
 *.swp
@@ -67,34 +77,16 @@ datasets/
 *~
 .DS_Store
 
-# ログファイル
-*.log
-logs/
-*.out
-
-# 一時ファイル
-*.tmp
-*.temp
+# Test / coverage / tox
 .cache/
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# モデルチェックポイントとSAE関連
-sae_mamba_layer*/
-mamba_layer*_delta.pt
-
-# 実験結果
-results/
-outputs/
-checkpoints/
-wandb/
-tensorboard/
-runs/
-
-# その他
+# Temp / backups
+*.tmp
+*.temp
 *.bak
 *.backup
 *.orig
-

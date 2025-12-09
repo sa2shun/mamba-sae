@@ -1,0 +1,32 @@
+output_root: /raid/sasaki/runs  # 保存先ルート（env/tilde展開可）
+model_name: EleutherAI/pythia-1.4b-deduped
+model_type: transformer
+layers: [6, 12, 18]  # L//4, L//2, 3L//4
+signal: state  # or state
+
+dataset:
+  name: wikitext
+  config: wikitext-103-raw-v1
+  split: train
+  max_docs: 1000000
+  max_tokens_total: 5000000
+
+sae:
+  hidden_factor: 8
+  mode: k_sparse  # or l1
+  k_frac: 0.1
+  l1_lambda: null  # l1 modeの場合のみ使用
+
+train:
+  batch_size: 1024
+  num_epochs: 5
+  num_workers: 4
+  lr: 1e-3
+  log_every: 100
+
+extract:
+  max_length: 1024
+  batch_size: 32
+  chunk_size: 100000
+
+devices: [0, 1, 2, 3, 4, 5, 6]

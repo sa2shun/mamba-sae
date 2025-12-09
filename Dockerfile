@@ -12,13 +12,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
+# プロジェクト本体と mamba-ssm ソースをコピー
 COPY pyproject.toml README.md ./
+COPY mamba-src ./mamba-src
 
-# ① pip 系をアップデート
-# ② 先に mamba-ssm を単独で入れる（失敗箇所を切り分けやすくする）
-# ③ 最後に自分のパッケージをインストール
+# ① pip 周りをアップデート
+# ② jupyter / datasets をインストール
+# ③ mamba-ssm を手元ソースからビルドし直す
+# ④ 最後に自分のパッケージをインストール
 RUN pip install --upgrade pip setuptools wheel \
- && pip install "mamba-ssm[causal-conv1d]" \
+ && pip install jupyterlab datasets \
+ && cd /workspace/mamba-src \
+ && rm -rf build mamba_ssm.egg-info selective_scan_cuda*.so \
+ && pip install -e . --no-build-isolation \
+ && cd /workspace \
  && pip install ".[dev]"
 
 CMD ["/bin/bash"]
