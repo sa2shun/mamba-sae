@@ -8,8 +8,9 @@ import argparse
 import json
 import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import torch
 import torch.nn as nn
@@ -86,26 +87,75 @@ def load_model_and_tokenizer(model_name: str, model_type: str, device_ids: List[
     return model, tokenizer, device
 
 
+def _get_layer_module(model, model_type: str, layer_index: int):
+    """Return the underlying layer module for residual capture (transformer only)."""
+    base = model.module if isinstance(model, nn.DataParallel) else model
+    if model_type != "transformer":
+        raise ValueError("Residual signals are only implemented for transformer backbones.")
+    if hasattr(base, "gpt_neox"):
+        layers = base.gpt_neox.layers
+    elif hasattr(base, "model") and hasattr(base.model, "layers"):
+        layers = base.model.layers
+    else:
+        raise ValueError("Unsupported transformer architecture for residual capture.")
+    if layer_index < 0 or layer_index >= len(layers):
+        raise IndexError(f"Layer index {layer_index} out of range (max {len(layers)-1}).")
+    return layers[layer_index]
+
+
+@contextmanager
+def capture_residual_stream(model, model_type: str, layer_index: int, signal: str):
+    """Context manager to capture resid_pre_mlp / resid_post_mlp activations."""
+    storage: List[torch.Tensor] = []
+    handles = []
+
+    layer = _get_layer_module(model, model_type, layer_index)
+
+    if signal == "resid_pre_mlp":
+        def hook(module, inputs, output):
+            storage.append(inputs[0].detach().float().cpu())
+
+        handles.append(layer.mlp.register_forward_hook(hook))
+    elif signal == "resid_post_mlp":
+        def hook(module, inputs, output):
+            storage.append(output.detach().float().cpu())
+
+        handles.append(layer.register_forward_hook(hook))
+    else:
+        raise ValueError(f"Unknown residual signal: {signal}")
+
+    try:
+        yield storage
+    finally:
+        for h in handles:
+            h.remove()
+
+
 def extract_features(
     model,
     tokenizer,
     device,
     dataset,
     target_layer: int,
-    signal: str,  # "state" or "delta"
+    signal: str,  # "state" | "delta" | "resid_pre_mlp" | "resid_post_mlp"
     max_length: int,
     batch_size: int,
     max_docs: Optional[int],
     max_tokens_total: Optional[int],
     output_dir: Path,
     chunk_size: int = 100000,
+    model_type: str = "transformer",
 ):
     """特徴を抽出してchunkごとに保存"""
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     all_features = []
     total_tokens = 0
     chunk_idx = 0
+
+    # For residual signals we need the 0-based layer index
+    layer_module_index = target_layer - 1  # hidden_states uses +1 indexing
+    num_devices = len(model.device_ids) if isinstance(model, nn.DataParallel) else 1
     
     with torch.no_grad():
         for batch_texts in tqdm(batch_iter(dataset, batch_size=batch_size, max_docs=max_docs), desc="Extracting features"):
@@ -120,26 +170,40 @@ def extract_features(
                 max_length=max_length,
             ).to(device)
             
-            out = model(
-                **enc,
-                output_hidden_states=True,
-                return_dict=True,
-                use_cache=False,
-            )
-            
-            # DataParallel使用時は.moduleでアクセス
-            hs = out.hidden_states[target_layer]  # [B, T, d]
+            if signal in ("state", "delta"):
+                out = model(
+                    **enc,
+                    output_hidden_states=True,
+                    return_dict=True,
+                    use_cache=False,
+                )
+                hs = out.hidden_states[target_layer]  # [B, T, d]
+            else:
+                # residual streams (transformer only)
+                if num_devices > 1:
+                    print("Warning: resid_* signals with DataParallel may be slower; consider single GPU for hooks.")
+                with capture_residual_stream(model, model_type, layer_module_index, signal) as storage:
+                    _ = model(
+                        **enc,
+                        output_hidden_states=False,
+                        return_dict=True,
+                        use_cache=False,
+                    )
+                if len(storage) == 0:
+                    continue
+                hs = torch.cat(storage, dim=0)  # [B, T, d]
+
             attn = enc["attention_mask"]  # [B, T]
-            
+
             B, T, D = hs.shape
             for b in range(B):
                 valid_len = int(attn[b].sum().item())
                 if valid_len <= 1:
                     continue
-                
+
                 h_seq = hs[b, :valid_len, :].float().cpu()  # [L, d]
-                
-                if signal == "state":
+
+                if signal == "state" or signal.startswith("resid_"):
                     features = h_seq  # [L, d]
                 elif signal == "delta":
                     if valid_len <= 1:
@@ -147,10 +211,10 @@ def extract_features(
                     features = h_seq[1:] - h_seq[:-1]  # [L-1, d]
                 else:
                     raise ValueError(f"Unknown signal: {signal}")
-                
+
                 all_features.append(features)
                 total_tokens += features.shape[0]
-                
+
                 # chunk_sizeに達したら保存
                 current_size = sum(f.shape[0] for f in all_features)
                 if current_size >= chunk_size:
@@ -160,13 +224,13 @@ def extract_features(
                     print(f"Saved {chunk_path} with shape {chunk.shape}")
                     all_features = []
                     chunk_idx += 1
-                
+
                 if max_tokens_total is not None and total_tokens >= max_tokens_total:
                     break
             
             if max_tokens_total is not None and total_tokens >= max_tokens_total:
                 break
-    
+
     # 残りを保存
     if len(all_features) > 0:
         chunk = torch.cat(all_features, dim=0)
@@ -224,11 +288,16 @@ def main():
         config["layers"] = [args.layer]
     if args.signal:
         config["signal"] = args.signal
-    
+
     model_name = config["model_name"]
     model_type = config.get("model_type", "mamba" if "mamba" in model_name.lower() else "transformer")
     layers = config["layers"]
-    signal = config["signal"]
+    signals = config.get("signals")
+    if signals is None:
+        signals = [config.get("signal", "state")]
+    if args.signal:
+        signals = [args.signal]
+
     dataset_config = config["dataset"]
     devices = config.get("devices", [0])
     extract_config = config.get("extract", {})
@@ -252,26 +321,28 @@ def main():
     copy_config(args.config, model_dir)
     
     # 各層について特徴抽出
-    for layer in layers:
-        print(f"\n{'='*60}")
-        print(f"Processing layer {layer}")
-        print(f"{'='*60}")
-        
-        output_dir = model_dir / f"layer_{layer}" / signal
-        extract_features(
-            model=model,
-            tokenizer=tokenizer,
-            device=device,
-            dataset=ds,
-            target_layer=layer,
-            signal=signal,
-            max_length=max_length,
-            batch_size=batch_size,
-            max_docs=max_docs,
-            max_tokens_total=max_tokens_total,
-            chunk_size=chunk_size,
-            output_dir=output_dir,
-        )
+    for signal in signals:
+        for layer in layers:
+            print(f"\n{'='*60}")
+            print(f"Processing layer {layer}, signal={signal}")
+            print(f"{'='*60}")
+            
+            output_dir = model_dir / f"layer_{layer}" / signal
+            extract_features(
+                model=model,
+                tokenizer=tokenizer,
+                device=device,
+                dataset=ds,
+                target_layer=layer,
+                signal=signal,
+                max_length=max_length,
+                batch_size=batch_size,
+                max_docs=max_docs,
+                max_tokens_total=max_tokens_total,
+                chunk_size=chunk_size,
+                output_dir=output_dir,
+                model_type=model_type,
+            )
 
 
 if __name__ == "__main__":

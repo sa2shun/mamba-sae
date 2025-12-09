@@ -1,0 +1,40 @@
+output_root: /raid/sasaki/runs
+model_name: EleutherAI/pythia-1.4b-deduped
+model_type: transformer
+layers: [2, 6, 12, 18, 24]
+signals: [state, delta]
+
+dataset:
+  name: wikitext
+  config: wikitext-103-raw-v1
+  split: train
+  max_docs: 1000000
+  max_tokens_total: 2000000
+  stats_tokens: 2000000
+
+sae:
+  hidden_factor: [2, 4, 8]
+  k_frac: [0.02, 0.05, 0.1]
+  l1_lambda: [0.0, 0.0001, 0.001]
+  eq_alpha: [0.0, 0.001, 0.01]
+  eq_target: null
+
+train:
+  seeds: [0, 1, 2]
+  batch_size: 1024
+  num_epochs: 5
+  num_workers: 8
+  lr: 0.001
+  weight_decay: 0.01
+  warmup_steps: 1000
+  val_split: 0.1
+  clip_grad_norm: 1.0
+  log_every: 100
+  pin_memory: true
+
+extract:
+  max_length: 1024
+  batch_size: 64
+  chunk_size: 100000
+
+devices: [0, 1, 2, 3]
